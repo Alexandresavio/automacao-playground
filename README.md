@@ -4,9 +4,9 @@ Este repositório é dedicado ao aprendizado prático de ferramentas de automaç
 
 ## Estrutura
 
-- `/web`: Automação de testes em navegadores.
-- `/mobile`: Automação de testes em aplicativos móveis.
 - `/api`: Testes de APIs REST.
+- `/mobile`: Automação de testes em aplicativos móveis.
+- `/web`: Automação de testes em navegadores.
 
 ## Requisitos
 
