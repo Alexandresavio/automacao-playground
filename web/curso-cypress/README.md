@@ -2,7 +2,7 @@
 
 ---
 
-# 🧪 **Guia de Estudo Cypress do Iniciante ao Avançado**
+# 🧪 **Guia de Estudo Cypress para iniciante**
 
 Aprenda de forma didática e prática os principais tópicos abordados no curso *Cypress Playground*:
 
