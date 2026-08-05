@@ -164,7 +164,7 @@ test('deve poder cadastrar uma nova tarefa (utilizando dados dinâmicos)', async
   const inputTaskName = page.locator('input[class*="InputNewTask"]');
 
   // Preenche utilizando dados gerados pelo Faker. Dessa forma evitamos repetir sempre a mesma informação.
-  await inputTaskName.fill(faker.lorem.words());
+  //await inputTaskName.fill(faker.lorem.words());
 
   // Clica no botão Create
   await page.click('xpath=//button[contains(text(), "Create")]');
@@ -307,7 +307,8 @@ test.only('não deve permitir tarefa duplicada (parte 2)', async ({ page, reques
 
   // Cadastra a tarefa pela API para que, ao tentar criá-la novamente
   // pela interface, seja validada a regra de duplicidade.
-  await request.post('http://localhost:3333/tasks/' + task.name);
+  const newTask = await request.post('http://localhost:3333/tasks/',{data:task});
+  expect(newTask.ok()).toBeTruthy();
 
   // Acessa a aplicação web.
   await page.goto('http://localhost:8080/');
