@@ -1,5 +1,5 @@
 // Importa duas funções da biblioteca oficial do Playwright.
-import { test, expect } from '@playwright/test';
+import { test, expect,APIRequestContext } from '@playwright/test';
 import { TaskModel } from './fixtures/task.model';
 
 //Cada chamada da função test() representa um caso de teste independente.
@@ -291,7 +291,7 @@ test('não deve permitir tarefa duplicada', async ({ page, request }) => {
 // Exemplo:
 // import { TaskModel } from '../fixtures/task.model';
 
-test.only('não deve permitir tarefa duplicada (parte 2)', async ({ page, request }) => {
+test('não deve permitir tarefa duplicada (parte 2)', async ({ page, request }) => {
 
   // Massa de teste tipada conforme o contrato esperado pela API.
   // Caso algum campo esteja incorreto ou ausente, o TypeScript
@@ -329,3 +329,35 @@ test.only('não deve permitir tarefa duplicada (parte 2)', async ({ page, reques
   await expect(target).toHaveText('Task already exists!');
 });
 
+/***********************************************************************************************
+ * Custom Commands (Helpers)
+ ***********************************************************************************************/
+
+async function deleteTaskByHelper(request:APIRequestContext, taskName:string){
+  await request.delete('http://localhost:3333/helper/tasks/' + taskName);
+}
+
+
+test.only('deve poder cadastrar uma nova tarefa (validando Custom Commands)', async ({ page, request }) => {
+  const task: TaskModel = {
+    name: 'Estudar algoritmos',
+    is_done: false
+  }
+
+  await deleteTaskByHelper(request, task.name);
+  
+  const newTask = await request.post('http://localhost:3333/tasks/',{data:task});
+  expect(newTask.ok()).toBeTruthy();
+
+  await page.goto('http://localhost:8080/');
+
+  const inputTaskName = page.locator('input[class*=InputNewTask]');
+  await inputTaskName.fill(task.name);
+  await page.click('xpath=//button[contains(text(), "Create")]');
+
+  const target = page.locator(`css=.task-item p >> text=${task.name}`);
+  await expect(target).toBeVisible();
+
+
+
+});
