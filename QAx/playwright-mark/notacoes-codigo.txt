@@ -329,3 +329,252 @@ test.only('não deve permitir tarefa duplicada (parte 2)', async ({ page, reques
   await expect(target).toHaveText('Task already exists!');
 });
 
+
+// Importa as ferramentas principais do Playwright:
+// "test" cria/define um caso de teste, "expect" faz as validações (assertividade)
+import { test, expect } from '@playwright/test';
+
+// Importa a interface que modela a massa de teste (name: string, is_done: boolean)
+import { TaskModel } from './fixtures/task.model';
+
+// Importa os Custom Helpers encapsulados na camada "support/helpers.ts"
+// deleteByHelper -> remove uma tarefa pelo nome via API
+// postTask       -> cadastra uma tarefa via API (sem passar pela UI)
+import { deleteByHelper, postTask } from './support/helpers';
+
+
+// ===================================================================
+// TESTE 1: Cadastro de nova tarefa (fluxo feliz / happy path via UI)
+// ===================================================================
+test('deve poder cadastrar uma nova tarefa (validando comportamento )', async ({ page, request }) => {
+  // "page"    -> contexto de navegação (interações visuais no browser)
+  // "request" -> contexto de API (APIRequestContext), usado pelos helpers
+
+  // Define a massa de teste tipada pela interface TaskModel
+  const task: TaskModel = {
+    name: 'Ler um livro de TypeScript',
+    is_done: false
+  }
+
+  // Limpa o ambiente antes do teste: garante que essa tarefa não existe
+  // ainda no banco, evitando falso positivo/negativo por dados sujos
+  await deleteByHelper(request, task.name);
+
+  // Navega até a aplicação sendo testada
+  await page.goto('http://localhost:8080/');
+
+  // Localiza o campo de input de nova tarefa pelo atributo class
+  const inputTaskName = page.locator('input[class*=InputNewTask]');
+
+  // Preenche o campo com o nome da tarefa
+  await inputTaskName.fill(task.name);
+
+  // Clica no botão "Create" para cadastrar a tarefa via interface (UI)
+  await page.click('css=button >> text=Create');
+
+  // Localiza o item de tarefa recém-criado na lista, buscando pelo texto
+  const target = page.locator(`css=.task-item p >> text=${task.name}`);
+
+  // Valida (assertividade) que o item está visível na tela após o cadastro
+  await expect(target).toBeVisible();
+});
+
+
+// ===================================================================
+// TESTE 2: Validação de regra de negócio - não permitir duplicidade
+// ===================================================================
+test('não deve permitir tarefa duplicada', async ({ page, request }) => {
+  // Define a massa de teste específica para este cenário
+  const task: TaskModel = {
+    name: 'Estudar algoritmos',
+    is_done: false
+  };
+
+  // Limpa o ambiente antes do teste (reuso do mesmo helper do Teste 1)
+  await deleteByHelper(request, task.name);
+
+  // Cadastra a tarefa ANTES via API (sem passar pela tela),
+  // forçando o cenário de duplicidade que será testado a seguir
+  await postTask(request, task);
+
+  // Navega até a aplicação
+  await page.goto('http://localhost:8080/');
+
+  // Localiza o campo de input de nova tarefa
+  const inputTaskName = page.locator('input[class*=InputNewTask]');
+
+  // Preenche com o MESMO nome de tarefa que já foi cadastrado via API
+  await inputTaskName.fill(task.name);
+
+  // Tenta cadastrar de novo pela interface (UI) - deve falhar pois já existe
+  await page.click('css=button >> text=Create');
+
+  // Localiza o container do alerta (SweetAlert2 - biblioteca de popups)
+  const target = page.locator('.swal2-html-container');
+
+  // Valida que a mensagem de erro esperada aparece na tela,
+  // confirmando que a regra de negócio de "não duplicar" está funcionando
+  await expect(target).toHaveText('Task already exists!');
+});
+
+/**************************************************************************************************************************** 
+* Page Objects na prática:
+* tasks.page.ts — explica o padrão Page Object Model:
+* a propriedade readonly page, o papel do constructor, por que usar this.page dentro dos métodos,
+* e como cada método encapsula uma responsabilidade específica da tela (navegar, cadastrar, validar sucesso, validar alerta). 
+*****************************************************************************************************************************/
+
+// Importa "expect" (para as validações dentro dos métodos de assertividade) e "Page" (o tipo do objeto que representa o contexto do navegador/aba)
+import { expect, Page } from "@playwright/test";
+
+// Importa a interface que modela a massa de teste
+import { TaskModel } from "../../../fixtures/task.model";
+
+// Classe que representa o Page Object da página de tarefas.
+// Padrão de projeto "Page Object Model" (POM): cada página da aplicação
+// ganha uma classe própria, concentrando elementos e ações da tela.
+// Só existe para automação WEB - não existe Page Object para API ou mobile.
+
+export class TasksPage {
+
+    // Propriedade "readonly" (somente leitura) que guarda o contexto da página. É através dela que os métodos da classe conseguem acessar
+    // o navegador para clicar, preencher campos, etc.
+    readonly page: Page;
+
+    // Constructor: função especial que é executada automaticamente toda vez que a classe é instanciada (ex: new TasksPage(page)).
+    // Recebe o contexto "page" vindo do teste e guarda na propriedade "this.page" para que os outros métodos da classe possam usá-lo.
+    constructor(page: Page) {
+        this.page = page;
+    }
+
+    // Método que encapsula a AÇÃO de cadastrar uma tarefa na tela. Recebe a massa de teste completa (do tipo TaskModel) como argumento.
+    async create(task: TaskModel) {
+        // Localiza o campo de input pelo atributo class (usa "this.page" e não apenas "page", porque estamos dentro de um método da
+        // classe - "page" sozinho não existe nesse escopo)
+        const inputTaskName = this.page.locator('input[class*=InputNewTask]');
+
+        // Preenche o campo com o nome da tarefa recebida por parâmetro
+        await inputTaskName.fill(task.name);
+
+        // Clica no botão "Create" para efetivar o cadastro
+        await this.page.click('css=button >> text=Create');
+    }
+
+    // Método que encapsula a navegação até a página principal da aplicação. Não recebe nenhum argumento porque a URL é sempre a mesma.
+    async go() {
+        await this.page.goto('http://localhost:8080/');
+    }
+
+    // Método de VALIDAÇÃO para o cenário de sucesso: confirma que a tarefa cadastrada aparece visível na lista.
+    // Recebe o nome da tarefa (string) para montar o localizador dinâmico.
+    async shouldHaveText(taskName: string) {
+        const target = this.page.locator(`css=.task-item p >> text=${taskName}`);
+        await expect(target).toBeVisible();
+    }
+
+    // Método de VALIDAÇÃO para o cenário de duplicidade: confirma que o modal de alerta (SweetAlert2) exibe o texto esperado.
+    // Recebe o texto esperado como argumento, em vez de deixar fixo ("hard coded"), para ter flexibilidade de testar outras mensagens.
+    async alertHaveText(text: string) {
+        const target = this.page.locator('.swal2-html-container');
+        await expect(target).toHaveText(text);
+    }
+}
+
+/***********************************************************************************************************************************
+* Page Objects na prática:
+* tasks.spec.ts — foca nos conceitos de input/output/ação que a aula destacou: cada teste tem sua própria massa de dados e validação,
+* mas reutiliza a mesma ação (go, create) através do Page Object.
+************************************************************************************************************************************/
+// Importa as ferramentas principais do Playwright: "test" define o caso de teste, "expect" faz as validações (assertividade)
+import { test, expect } from '@playwright/test';
+
+// Importa a interface que modela a massa de teste (name: string, is_done: boolean)
+import { TaskModel } from './fixtures/task.model';
+
+// Importa os Custom Helpers de API: limpar tarefa (deleteByHelper) e cadastrar tarefa direto via API sem passar pela tela (postTask)
+import { deleteByHelper, postTask } from './support/helpers';
+
+/**
+  Importa a classe TasksPage - o Page Object que representa a página de tarefas da aplicação. É essa classe que concentra os elementos
+  e as ações da tela, evitando código repetido entre os testes
+*/
+import { TasksPage } from './support/pages/tasks';
+
+
+// ===================================================================
+// TESTE 1: Cadastro de nova tarefa (fluxo feliz / happy path via UI)
+// ===================================================================
+test('deve poder cadastrar uma nova tarefa (validando comportamento )', async ({ page, request }) => {
+  // "page"    -> contexto de navegação (interações visuais no browser)
+  // "request" -> contexto de API (APIRequestContext), usado pelos helpers
+
+  // Define a massa de teste (input) tipada pela interface TaskModel
+  const task: TaskModel = {
+    name: 'Ler um livro de TypeScript',
+    is_done: false
+  }
+
+  /*
+  * Preparação do cenário: limpa o ambiente antes do teste, garantindo que essa tarefa ainda não 
+  * existe no banco (evita massa de teste "suja")
+  */
+  await deleteByHelper(request, task.name);
+
+  /**
+  *  Instancia o Page Object TasksPage, passando o contexto "page" do teste para o construtor da classe.
+  *  A partir daqui, "tasksPage" é o objeto que representa a página e sabe como interagir com ela
+  */
+  const tasksPage: TasksPage = new TasksPage(page);
+
+  // Ação: acessa a página principal da aplicação (encapsulado no método go())
+  await tasksPage.go();
+
+  // Ação: preenche o campo de nome e clica no botão Create(encapsulado no método create(), que recebe a massa de teste completa)
+  await tasksPage.create(task);
+
+  // validação (output): confirma que a tarefa aparece visível na lista após o cadastro (encapsulado no método shouldHaveText())
+  await tasksPage.shouldHaveText(task.name);
+});
+
+/*********************************************************************************************/
+// ===================================================================
+// TESTE 2: Validação de regra de negócio - não permitir duplicidade
+// ===================================================================
+test('não deve permitir tarefa duplicada', async ({ page, request }) => {
+
+  // Define a massa de teste (input) específica para este cenário
+  const task: TaskModel = {
+    name: 'Estudar algoritmos',
+    is_done: false
+  };
+
+  // Preparação do cenário: limpa o ambiente antes do teste
+  await deleteByHelper(request, task.name);
+
+  /**
+  * Preparação do cenário (diferente do teste 1): cadastra a tarefa ANTES via API,
+  * forçando o cenário de duplicidade que será testado ao tentar cadastrar a mesma 
+  * tarefa novamente pela tela
+  */
+  await postTask(request, task);
+
+  /**
+  * Instancia o mesmo Page Object - reuso de código entre os dois testes, é exatamente
+  * o benefício do padrão Page Object explicado na aula
+  */
+  const tasksPage: TasksPage = new TasksPage(page);
+
+  // Ação: acessa a página principal (mesmo código do teste 1, sem duplicação)
+  await tasksPage.go();
+
+  /**
+  * Ação: tenta cadastrar a MESMA tarefa que já existe (mesmo código do teste 1,
+  * mas aqui vai gerar duplicidade por causa do postTask acima)
+  */
+  await tasksPage.create(task);
+
+  /**
+  * validação (output diferente do teste 1): confirma que o alerta de duplicidade (SweetAlert2) exibe a mensagem esperada
+  */
+  await tasksPage.alertHaveText('Task already exists!');
+});

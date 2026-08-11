@@ -1,49 +1,36 @@
 import { test, expect } from '@playwright/test';
-interface TaskModel {
-  name: string
-  is_done: boolean
-}
+import { TaskModel } from './fixtures/task.model';
+import { deleteByHelper, postTask } from './support/helpers';
+import { TasksPage } from './support/pages/tasks';
 
 test('deve poder cadastrar uma nova tarefa (validando comportamento )', async ({ page, request }) => {
   const task: TaskModel = {
     name: 'Ler um livro de TypeScript',
     is_done: false
   }
-  await request.delete('http://localhost:3333/helper/tasks/' + task.name);
+  await deleteByHelper(request, task.name);
 
-  await page.goto('http://localhost:8080/');
-
-  const inputTaskName = page.locator('input[class*=InputNewTask]');
-  await inputTaskName.fill(task.name);
-  await page.click('css=button >> text=Create');
-
-  const target = page.locator(`css=.task-item p >> text=${task.name}`);
-  await expect(target).toBeVisible();
+  const tasksPage: TasksPage = new TasksPage(page);
+  await tasksPage.go();
+  await tasksPage.create(task);
+  await tasksPage.shouldHaveText(task.name);
 
 });
 
-test.only('não deve permitir tarefa duplicada', async ({ page, request }) => {
+/*********************************************************************************************/
+test('não deve permitir tarefa duplicada', async ({ page, request }) => {
 
   const task: TaskModel = {
     name: 'Estudar algoritmos',
     is_done: false
   };
 
-  await request.delete('http://localhost:3333/helper/tasks/' + task.name);
+  await deleteByHelper(request, task.name);
+  await postTask(request, task);
 
-  const newTask = await request.post('http://localhost:3333/tasks/', { data: task });
-  expect(newTask.ok()).toBeTruthy();
-
-  await page.goto('http://localhost:8080/');
-
-  const inputTaskName = page.locator('input[class*=InputNewTask]');
-  await inputTaskName.fill(task.name);
-
-  await page.click('css=button >> text=Create');
-
-  const target = page.locator('.swal2-html-container');
-  await expect(target).toHaveText('Task already exists!');
-
-
+  const tasksPage: TasksPage = new TasksPage(page);
+  await tasksPage.go();
+  await tasksPage.create(task);
+  await tasksPage.alertHaveText('Task already exists!');
 
 });
